@@ -1,17 +1,29 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import axios from "axios";
+import { useCallback, useEffect, useState } from "react";
 import { FieldValues, SubmitHandler, useForm } from "react-hook-form";
 import Input from "./inputs/Input";
 import Button from "./Button";
 import { BsGithub, BsGoogle } from "react-icons/bs";
 import AuthSocialButton from "./AuthSocialButton";
+import toast from "react-hot-toast";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 type Variant = "LOGIN" | "REGISTER";
 
 const AuthForm = () => {
+  const session = useSession();
+  const router = useRouter();
   const [variant, setVariant] = useState<Variant>("LOGIN");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (session?.status === "authenticated") {
+      router.push("/users");
+    }
+  }, [session?.status, router]);
 
   const toggleVariant = useCallback(() => {
     if (variant === "LOGIN") {
@@ -38,10 +50,30 @@ const AuthForm = () => {
 
     if (variant === "REGISTER") {
       // Axios Register
+      axios
+        .post("/api/register", data)
+        .then(() => signIn("credentials", data))
+        .catch(() => toast.error("Something went wrong!"))
+        .finally(() => setIsLoading(false));
     }
 
     if (variant === "LOGIN") {
       // Next Auth Signin
+      signIn("credentials", {
+        ...data,
+        redirect: false,
+      })
+        .then((callback) => {
+          if (callback?.error) {
+            toast.error("Invalid credentials.");
+          }
+
+          if (callback?.ok && !callback?.error) {
+            toast.success("Logged in!");
+            router.push("/users");
+          }
+        })
+        .finally(() => setIsLoading(false));
     }
   };
 
@@ -49,6 +81,18 @@ const AuthForm = () => {
     setIsLoading(true);
 
     // Next Auth Social Sign In
+    signIn(action, { redirect: false })
+      .then((callback) => {
+        if (callback?.error) {
+          toast.error("Invalid credentials.");
+        }
+
+        if (callback?.ok && !callback?.error) {
+          toast.success("Logged in!");
+          router.push("/users");
+        }
+      })
+      .finally(() => setIsLoading(false));
   };
 
   return (
@@ -59,7 +103,13 @@ const AuthForm = () => {
       <div className="mx-4 rounded-md bg-white px-4 py-8 shadow sm:mx-0 sm:rounded-lg sm:px-10">
         <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
           {variant === "REGISTER" && (
-            <Input id="name" label="Name" register={register} errors={errors} />
+            <Input
+              id="name"
+              label="Name"
+              register={register}
+              errors={errors}
+              disabled={isLoading}
+            />
           )}
 
           <Input
@@ -68,6 +118,7 @@ const AuthForm = () => {
             type="email"
             register={register}
             errors={errors}
+            disabled={isLoading}
           />
 
           <Input
@@ -76,6 +127,7 @@ const AuthForm = () => {
             type="password"
             register={register}
             errors={errors}
+            disabled={isLoading}
           />
           <div>
             <Button disabled={isLoading} fullWidth type="submit">
@@ -108,7 +160,7 @@ const AuthForm = () => {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-center gap-2 px-2 text-gray-500">
+        <div className="mt-6 flex justify-center gap-2 px-2 text-sm text-gray-500 sm:text-base">
           <div>
             {variant === "LOGIN"
               ? "New to Messenger?"
